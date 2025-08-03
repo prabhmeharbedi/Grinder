@@ -2,8 +2,12 @@ import SwiftUI
 import CoreData
 
 struct DSAProblemRowView: View {
-    let problem: DSAProblem
+    @ObservedObject var problem: DSAProblem
     let onToggle: () -> Void
+    
+    @EnvironmentObject private var accessibilityManager: AccessibilityManager
+    @EnvironmentObject private var errorHandler: ErrorHandler
+    @Environment(\.managedObjectContext) private var viewContext
     
     @State private var showingNotes = false
     @State private var showingTimeTracker = false
@@ -11,13 +15,16 @@ struct DSAProblemRowView: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 12) {
-                // Completion checkbox
-                Button(action: onToggle) {
-                    Image(systemName: problem.isCompleted ? "checkmark.circle.fill" : "circle")
-                        .font(.title2)
-                        .foregroundColor(problem.isCompleted ? .green : .gray)
+                // ACCESSIBILITY INTEGRATED CHECKBOX
+                AccessibleCheckbox(
+                    isChecked: .constant(problem.isCompleted),
+                    problemName: problem.problemName ?? "Unknown Problem",
+                    difficulty: problem.difficulty ?? "Unknown",
+                    timeSpent: problem.timeSpent,
+                    hasNotes: !(problem.notes?.isEmpty ?? true)
+                ) {
+                    onToggle()
                 }
-                .buttonStyle(PlainButtonStyle())
                 
                 // Problem details
                 VStack(alignment: .leading, spacing: 4) {
@@ -27,6 +34,7 @@ struct DSAProblemRowView: View {
                             .fontWeight(.medium)
                             .strikethrough(problem.isCompleted)
                             .foregroundColor(problem.isCompleted ? .secondary : .primary)
+                            .accessibilityAddTraits(.isHeader)
                         
                         Spacer()
                         
@@ -38,6 +46,7 @@ struct DSAProblemRowView: View {
                                 .background(Color.blue.opacity(0.1))
                                 .foregroundColor(.blue)
                                 .cornerRadius(4)
+                                .accessibilityLabel("LeetCode number \(leetcodeNumber)")
                         }
                     }
                     
@@ -51,6 +60,7 @@ struct DSAProblemRowView: View {
                             .background(difficultyColor.opacity(0.1))
                             .foregroundColor(difficultyColor)
                             .cornerRadius(4)
+                            .accessibilityLabel("Difficulty: \(problem.difficulty ?? "Unknown")")
                         
                         if problem.isBonusProblem {
                             Text("BONUS")
@@ -61,6 +71,7 @@ struct DSAProblemRowView: View {
                                 .background(Color.green.opacity(0.1))
                                 .foregroundColor(.green)
                                 .cornerRadius(4)
+                                .accessibilityLabel("Bonus problem")
                         }
                         
                         Spacer()
@@ -70,10 +81,13 @@ struct DSAProblemRowView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "clock")
                                     .font(.caption)
+                                    .accessibilityHidden(true)
                                 Text(problem.formattedTimeSpent)
                                     .font(.caption)
                             }
                             .foregroundColor(.secondary)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("Time spent: \(formatTimeAccessible(problem.timeSpent))")
                         }
                     }
                 }
@@ -81,20 +95,18 @@ struct DSAProblemRowView: View {
                 // Action buttons
                 HStack(spacing: 8) {
                     if problem.hasNotes {
-                        Button(action: { showingNotes = true }) {
-                            Image(systemName: "note.text")
-                                .font(.caption)
-                                .foregroundColor(.blue)
+                        AccessibleButton("Notes", icon: "note.text", accessibilityHint: "View problem notes") {
+                            showingNotes = true
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        .font(.caption)
+                        .foregroundColor(.blue)
                     }
                     
-                    Button(action: { showingTimeTracker = true }) {
-                        Image(systemName: "timer")
-                            .font(.caption)
-                            .foregroundColor(.orange)
+                    AccessibleButton("Timer", icon: "timer", accessibilityHint: "Track time for this problem") {
+                        showingTimeTracker = true
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    .font(.caption)
+                    .foregroundColor(.orange)
                 }
             }
             
@@ -104,6 +116,7 @@ struct DSAProblemRowView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.caption)
                         .foregroundColor(.green)
+                        .accessibilityHidden(true)
                     
                     Text("Completed \(completedAt, style: .relative) ago")
                         .font(.caption)
@@ -111,6 +124,8 @@ struct DSAProblemRowView: View {
                     
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Completed \(completedAt, style: .relative) ago")
             }
         }
         .padding(.vertical, 4)
@@ -120,6 +135,7 @@ struct DSAProblemRowView: View {
         .sheet(isPresented: $showingTimeTracker) {
             TimeTrackerView(problem: problem)
         }
+        .accessibilityElement(children: .contain)
     }
     
     private var difficultyColor: Color {
@@ -134,14 +150,33 @@ struct DSAProblemRowView: View {
             return .gray
         }
     }
+    
+    private func formatTimeAccessible(_ minutes: Int32) -> String {
+        if minutes == 0 {
+            return "0 minutes"
+        } else if minutes < 60 {
+            return minutes == 1 ? "1 minute" : "\(minutes) minutes"
+        } else {
+            let hours = minutes / 60
+            let remainingMinutes = minutes % 60
+            let hourText = hours == 1 ? "1 hour" : "\(hours) hours"
+            if remainingMinutes > 0 {
+                let minText = remainingMinutes == 1 ? "1 minute" : "\(remainingMinutes) minutes"
+                return "\(hourText) and \(minText)"
+            } else {
+                return hourText
+            }
+        }
+    }
 }
 
 // MARK: - Problem Notes View
-
 struct ProblemNotesView: View {
-    let problem: DSAProblem
+    @ObservedObject var problem: DSAProblem
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var viewContext
+    @EnvironmentObject private var errorHandler: ErrorHandler
+    @EnvironmentObject private var accessibilityManager: AccessibilityManager
     
     @State private var notesText: String = ""
     
@@ -152,6 +187,7 @@ struct ProblemNotesView: View {
                     Text(problem.problemName ?? "Unknown Problem")
                         .font(.headline)
                         .fontWeight(.semibold)
+                        .accessibilityAddTraits(.isHeader)
                     
                     if let leetcodeNumber = problem.leetcodeNumber {
                         Text("LeetCode #\(leetcodeNumber)")
@@ -164,12 +200,14 @@ struct ProblemNotesView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Solution Notes")
                         .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
                     
                     TextEditor(text: $notesText)
                         .padding(8)
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
                         .frame(minHeight: 200)
+                        .accessibilityLabel("Problem notes text editor")
                 }
                 
                 Spacer()
@@ -179,12 +217,12 @@ struct ProblemNotesView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                    AccessibleButton("Cancel", accessibilityHint: "Cancel editing notes") {
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
+                    AccessibleButton("Save", accessibilityHint: "Save problem notes") {
                         saveNotes()
                     }
                     .fontWeight(.semibold)
@@ -194,26 +232,30 @@ struct ProblemNotesView: View {
         .onAppear {
             notesText = problem.notes ?? ""
         }
+        .accessibilityElement(children: .contain)
     }
     
     private func saveNotes() {
-        problem.updateNotes(notesText.isEmpty ? nil : notesText)
-        
         do {
+            problem.updateNotes(notesText.isEmpty ? nil : notesText)
             try viewContext.save()
+            
+            accessibilityManager.announceForVoiceOver("Notes saved")
             dismiss()
+            
         } catch {
-            print("Error saving notes: \(error)")
+            errorHandler.handle(error: .coreDataError(error), source: "ProblemNotesView.saveNotes")
         }
     }
 }
 
 // MARK: - Time Tracker View
-
 struct TimeTrackerView: View {
-    let problem: DSAProblem
+    @ObservedObject var problem: DSAProblem
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var viewContext
+    @EnvironmentObject private var errorHandler: ErrorHandler
+    @EnvironmentObject private var accessibilityManager: AccessibilityManager
     
     @State private var hours: Int = 0
     @State private var minutes: Int = 0
@@ -225,16 +267,19 @@ struct TimeTrackerView: View {
                     Text(problem.problemName ?? "Unknown Problem")
                         .font(.headline)
                         .fontWeight(.semibold)
+                        .accessibilityAddTraits(.isHeader)
                     
                     Text("Current time: \(problem.formattedTimeSpent)")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
+                        .accessibilityLabel("Current time spent: \(formatTimeAccessible(problem.timeSpent))")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
                 VStack(spacing: 20) {
                     Text("Set Time Spent")
                         .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
                     
                     HStack(spacing: 20) {
                         VStack {
@@ -249,6 +294,7 @@ struct TimeTrackerView: View {
                             }
                             .pickerStyle(WheelPickerStyle())
                             .frame(width: 80, height: 120)
+                            .accessibilityLabel("Hours picker")
                         }
                         
                         VStack {
@@ -263,6 +309,7 @@ struct TimeTrackerView: View {
                             }
                             .pickerStyle(WheelPickerStyle())
                             .frame(width: 80, height: 120)
+                            .accessibilityLabel("Minutes picker")
                         }
                     }
                     
@@ -274,7 +321,7 @@ struct TimeTrackerView: View {
                         
                         HStack(spacing: 12) {
                             ForEach([15, 30, 45, 60], id: \.self) { mins in
-                                Button("+\(mins)m") {
+                                AccessibleButton("+\(mins)m", accessibilityHint: "Add \(mins) minutes to current time") {
                                     addMinutes(mins)
                                 }
                                 .padding(.horizontal, 12)
@@ -294,12 +341,12 @@ struct TimeTrackerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                    AccessibleButton("Cancel", accessibilityHint: "Cancel time tracking") {
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
+                    AccessibleButton("Save", accessibilityHint: "Save time spent") {
                         saveTime()
                     }
                     .fontWeight(.semibold)
@@ -311,43 +358,75 @@ struct TimeTrackerView: View {
             hours = totalMinutes / 60
             minutes = totalMinutes % 60
         }
+        .accessibilityElement(children: .contain)
     }
     
     private func addMinutes(_ mins: Int) {
         let totalMinutes = hours * 60 + minutes + mins
         hours = totalMinutes / 60
         minutes = totalMinutes % 60
+        
+        accessibilityManager.announceForVoiceOver("Added \(mins) minutes")
     }
     
     private func saveTime() {
-        let totalMinutes = Int32(hours * 60 + minutes)
-        problem.setTime(minutes: totalMinutes)
-        
         do {
+            let totalMinutes = Int32(hours * 60 + minutes)
+            problem.setTime(minutes: totalMinutes)
             try viewContext.save()
+            
+            accessibilityManager.announceForVoiceOver("Time saved")
             dismiss()
+            
         } catch {
-            print("Error saving time: \(error)")
+            errorHandler.handle(error: .coreDataError(error), source: "TimeTrackerView.saveTime")
+        }
+    }
+    
+    private func formatTimeAccessible(_ minutes: Int32) -> String {
+        if minutes == 0 {
+            return "0 minutes"
+        } else if minutes < 60 {
+            return minutes == 1 ? "1 minute" : "\(minutes) minutes"
+        } else {
+            let hours = minutes / 60
+            let remainingMinutes = minutes % 60
+            let hourText = hours == 1 ? "1 hour" : "\(hours) hours"
+            if remainingMinutes > 0 {
+                let minText = remainingMinutes == 1 ? "1 minute" : "\(remainingMinutes) minutes"
+                return "\(hourText) and \(minText)"
+            } else {
+                return hourText
+            }
         }
     }
 }
 
-// MARK: - Preview
-
-struct DSAProblemRowView_Previews: PreviewProvider {
-    static var previews: some View {
-        let context = PersistenceController.preview.container.viewContext
-        let problem = DSAProblem(context: context)
-        problem.problemName = "Two Sum"
-        problem.leetcodeNumber = "1"
-        problem.difficulty = "Easy"
-        problem.isCompleted = false
-        problem.timeSpent = 45
-        
-        return DSAProblemRowView(problem: problem) {
-            problem.isCompleted.toggle()
+// MARK: - Extensions
+extension DSAProblem {
+    var formattedTimeSpent: String {
+        if timeSpent == 0 {
+            return "0m"
+        } else if timeSpent < 60 {
+            return "\(timeSpent)m"
+        } else {
+            let hours = timeSpent / 60
+            let remainingMinutes = timeSpent % 60
+            return remainingMinutes > 0 ? "\(hours)h \(remainingMinutes)m" : "\(hours)h"
         }
-        .padding()
-        .previewLayout(.sizeThatFits)
+    }
+    
+    var hasNotes: Bool {
+        return !(notes?.isEmpty ?? true)
+    }
+    
+    func updateNotes(_ newNotes: String?) {
+        notes = newNotes
+        updatedAt = Date()
+    }
+    
+    func setTime(minutes: Int32) {
+        timeSpent = minutes
+        updatedAt = Date()
     }
 }

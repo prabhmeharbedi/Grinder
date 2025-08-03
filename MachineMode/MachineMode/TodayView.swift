@@ -3,6 +3,9 @@ import CoreData
 
 struct TodayView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @EnvironmentObject private var accessibilityManager: AccessibilityManager
+    @EnvironmentObject private var errorHandler: ErrorHandler
+    @EnvironmentObject private var performanceMonitor: PerformanceMonitor
     @StateObject private var todayManager = TodayManager()
     
     @FetchRequest(
@@ -37,6 +40,7 @@ struct TodayView: View {
             }
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.large)
+            .accessibilityElement(children: .contain)
             .onAppear {
                 loadTodayData()
             }
@@ -60,13 +64,16 @@ struct TodayView: View {
             ProgressView()
                 .progressViewStyle(CircularProgressViewStyle(tint: .blue))
                 .scaleEffect(1.5)
+                .accessibilityLabel("Loading")
             
             Text("Loading today's curriculum...")
                 .font(.headline)
                 .foregroundColor(.secondary)
+                .accessibilityLabel("Loading today's curriculum data")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 100)
+        .accessibilityElement(children: .combine)
     }
     
     // MARK: - Day Header View
@@ -78,11 +85,13 @@ struct TodayView: View {
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundColor(.primary)
+                    .accessibilityLabel("Day \(day.dayNumber) of 100")
+                    .accessibilityAddTraits(.isHeader)
                 
                 Spacer()
                 
                 // Week theme badge
-                Text(CurriculumDataProvider.getWeekTheme(for: Int(day.dayNumber)))
+                Text(getWeekTheme(for: Int(day.dayNumber)))
                     .font(.caption)
                     .fontWeight(.semibold)
                     .padding(.horizontal, 12)
@@ -90,6 +99,7 @@ struct TodayView: View {
                     .background(Color.blue.opacity(0.1))
                     .foregroundColor(.blue)
                     .cornerRadius(12)
+                    .accessibilityLabel("Week theme: \(getWeekTheme(for: Int(day.dayNumber)))")
             }
             
             // Date
@@ -97,6 +107,7 @@ struct TodayView: View {
                 Text(date, style: .date)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+                    .accessibilityLabel("Date: \(date, style: .date)")
             }
             
             // Overall completion status
@@ -104,17 +115,21 @@ struct TodayView: View {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
+                        .accessibilityHidden(true)
                     Text("Day Completed!")
                         .font(.headline)
                         .foregroundColor(.green)
                 }
                 .padding(.top, 8)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Day completed successfully")
             }
         }
         .padding()
         .background(Color.cardBackground)
         .cornerRadius(16)
         .shadow(color: Color.shadowColor, radius: 8, x: 0, y: 2)
+        .accessibilityElement(children: .contain)
     }
     
     // MARK: - Progress Overview
@@ -123,6 +138,7 @@ struct TodayView: View {
             Text("Today's Progress")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
             
             HStack(spacing: 20) {
                 // DSA Progress
@@ -150,6 +166,8 @@ struct TodayView: View {
                         }
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("DSA Problems: \(day.dsaCompletionStats.completed) of \(day.dsaCompletionStats.total) completed, \(Int(day.dsaProgress * 100))%")
                 
                 Spacer()
                 
@@ -178,6 +196,8 @@ struct TodayView: View {
                         }
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("System Design: \(day.systemDesignCompletionStats.completed) of \(day.systemDesignCompletionStats.total) completed, \(Int(day.systemDesignProgress * 100))%")
             }
             
             // Progress details
@@ -190,6 +210,8 @@ struct TodayView: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Time spent: \(formatTimeAccessible(day.totalTimeSpent))")
                 
                 Spacer()
                 
@@ -203,6 +225,8 @@ struct TodayView: View {
                             .fontWeight(.medium)
                             .foregroundColor(.green)
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Bonus problems completed: \(day.bonusProblemsCount)")
                 }
             }
             
@@ -221,8 +245,9 @@ struct TodayView: View {
                         .foregroundColor(day.isCompleted ? .green : .primary)
                 }
                 
-                OptimizedProgressView(
-                    value: Double(day.overallProgress),
+                AccessibleProgressBar(
+                    current: Int(day.overallProgress * 100),
+                    total: 100,
                     color: day.isCompleted ? .adaptiveGreen : .adaptiveBlue
                 )
             }
@@ -231,6 +256,7 @@ struct TodayView: View {
         .background(Color.cardBackground)
         .cornerRadius(16)
         .shadow(color: Color.shadowColor, radius: 8, x: 0, y: 2)
+        .accessibilityElement(children: .contain)
     }
     
     // MARK: - DSA Section View
@@ -240,10 +266,12 @@ struct TodayView: View {
                 Image(systemName: "brain.head.profile")
                     .foregroundColor(.blue)
                     .font(.title2)
+                    .accessibilityHidden(true)
                 
                 Text("DSA Problems")
                     .font(.headline)
                     .fontWeight(.semibold)
+                    .accessibilityAddTraits(.isHeader)
                 
                 Spacer()
                 
@@ -259,6 +287,8 @@ struct TodayView: View {
                             .foregroundColor(.green)
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(day.dsaCompletionStats.completed) of \(day.dsaCompletionStats.total) problems completed, plus \(day.bonusProblemsCount) bonus problems")
             }
             
             // Progress details
@@ -267,6 +297,7 @@ struct TodayView: View {
                     Image(systemName: "clock")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .accessibilityHidden(true)
                     
                     Text("Total time: \(formatTime(day.totalTimeSpent))")
                         .font(.caption)
@@ -274,38 +305,34 @@ struct TodayView: View {
                     
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Total time spent: \(formatTimeAccessible(day.totalTimeSpent))")
             }
             
             LazyVStack(spacing: 12) {
                 ForEach(day.dsaProblemsArray, id: \.objectID) { problem in
-                    OptimizedDSAProblemRowView(problem: problem)
-                        .onAppear {
-                            // Update day progress when problem appears
-                            day.updateProgress()
-                        }
+                    DSAProblemRowView(problem: problem) {
+                        toggleProblemCompletion(problem)
+                    }
+                    .onAppear {
+                        day.updateProgress()
+                    }
                 }
             }
             
             // Add bonus problem button
-            Button(action: { showingAddBonusProblem = true }) {
-                HStack {
-                    Image(systemName: "plus.circle")
-                        .foregroundColor(.green)
-                    Text("Add Bonus Problem")
-                        .foregroundColor(.green)
-                        .fontWeight(.medium)
-                    Spacer()
-                }
-                .padding()
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(12)
+            AccessibleButton("Add Bonus Problem", icon: "plus.circle", accessibilityHint: "Add an additional problem to today's list") {
+                showingAddBonusProblem = true
             }
-            .buttonStyle(PlainButtonStyle())
+            .padding()
+            .background(Color.green.opacity(0.1))
+            .cornerRadius(12)
         }
         .padding()
         .background(Color.cardBackground)
         .cornerRadius(16)
         .shadow(color: Color.shadowColor, radius: 8, x: 0, y: 2)
+        .accessibilityElement(children: .contain)
     }
     
     // MARK: - System Design Section View
@@ -315,10 +342,12 @@ struct TodayView: View {
                 Image(systemName: "network")
                     .foregroundColor(.orange)
                     .font(.title2)
+                    .accessibilityHidden(true)
                 
                 Text("System Design")
                     .font(.headline)
                     .fontWeight(.semibold)
+                    .accessibilityAddTraits(.isHeader)
                 
                 Spacer()
                 
@@ -326,6 +355,7 @@ struct TodayView: View {
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(.orange)
+                    .accessibilityLabel("\(day.systemDesignCompletionStats.completed) of \(day.systemDesignCompletionStats.total) system design topics completed")
             }
             
             // Progress breakdown
@@ -335,6 +365,7 @@ struct TodayView: View {
                     Image(systemName: "clock")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .accessibilityHidden(true)
                     
                     Text("\(partiallyCompleted) partially completed")
                         .font(.caption)
@@ -342,13 +373,14 @@ struct TodayView: View {
                     
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(partiallyCompleted) topics partially completed")
             }
             
             LazyVStack(spacing: 12) {
                 ForEach(day.systemDesignTopicsArray, id: \.objectID) { topic in
-                    OptimizedSystemDesignTopicRowView(topic: topic)
+                    SystemDesignTopicRowView(topic: topic)
                         .onAppear {
-                            // Update day progress when topic appears
                             day.updateProgress()
                         }
                 }
@@ -358,6 +390,7 @@ struct TodayView: View {
         .background(Color.cardBackground)
         .cornerRadius(16)
         .shadow(color: Color.shadowColor, radius: 8, x: 0, y: 2)
+        .accessibilityElement(children: .contain)
     }
     
     // MARK: - Reflection Section View
@@ -367,14 +400,16 @@ struct TodayView: View {
                 Image(systemName: "lightbulb")
                     .foregroundColor(.purple)
                     .font(.title2)
+                    .accessibilityHidden(true)
                 
                 Text("Daily Reflection")
                     .font(.headline)
                     .fontWeight(.semibold)
+                    .accessibilityAddTraits(.isHeader)
                 
                 Spacer()
                 
-                Button("Edit") {
+                AccessibleButton("Edit", accessibilityHint: "Edit daily reflection") {
                     reflectionText = day.dailyReflection ?? ""
                     showingReflectionSheet = true
                 }
@@ -390,6 +425,7 @@ struct TodayView: View {
                     .padding()
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(12)
+                    .accessibilityLabel("Daily reflection: \(reflection)")
             } else {
                 Text("Add your thoughts about today's learning...")
                     .font(.body)
@@ -398,6 +434,8 @@ struct TodayView: View {
                     .padding()
                     .background(Color.gray.opacity(0.05))
                     .cornerRadius(12)
+                    .accessibilityLabel("Tap to add daily reflection")
+                    .accessibilityAddTraits(.isButton)
                     .onTapGesture {
                         reflectionText = ""
                         showingReflectionSheet = true
@@ -408,15 +446,43 @@ struct TodayView: View {
         .background(Color.cardBackground)
         .cornerRadius(16)
         .shadow(color: Color.shadowColor, radius: 8, x: 0, y: 2)
+        .accessibilityElement(children: .contain)
     }
     
     // MARK: - Reflection Sheet View
     private var reflectionSheetView: some View {
-        OptimizedReflectionView(
-            day: currentDay,
-            reflectionText: $reflectionText,
-            onDismiss: { showingReflectionSheet = false }
-        )
+        NavigationView {
+            VStack(spacing: 20) {
+                Text("Daily Reflection")
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                
+                TextEditor(text: $reflectionText)
+                    .padding(8)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                    .frame(minHeight: 200)
+                    .accessibilityLabel("Daily reflection text editor")
+                
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Reflection")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    AccessibleButton("Cancel", accessibilityHint: "Cancel editing reflection") {
+                        showingReflectionSheet = false
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    AccessibleButton("Save", accessibilityHint: "Save reflection") {
+                        saveReflection()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
     }
     
     // MARK: - Error View
@@ -425,23 +491,26 @@ struct TodayView: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 50))
                 .foregroundColor(.orange)
+                .accessibilityHidden(true)
             
             Text("Unable to load today's data")
                 .font(.headline)
                 .foregroundColor(.primary)
+                .accessibilityAddTraits(.isHeader)
             
             Text("Please try refreshing or check your data initialization.")
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
             
-            Button("Retry") {
+            AccessibleButton("Retry", accessibilityHint: "Retry loading today's data") {
                 loadTodayData()
             }
             .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 100)
+        .accessibilityElement(children: .contain)
     }
     
     // MARK: - Helper Methods
@@ -455,6 +524,30 @@ struct TodayView: View {
             let remainingMinutes = minutes % 60
             return remainingMinutes > 0 ? "\(hours)h \(remainingMinutes)m" : "\(hours)h"
         }
+    }
+    
+    private func formatTimeAccessible(_ minutes: Int32) -> String {
+        if minutes == 0 {
+            return "0 minutes"
+        } else if minutes < 60 {
+            return minutes == 1 ? "1 minute" : "\(minutes) minutes"
+        } else {
+            let hours = minutes / 60
+            let remainingMinutes = minutes % 60
+            let hourText = hours == 1 ? "1 hour" : "\(hours) hours"
+            if remainingMinutes > 0 {
+                let minText = remainingMinutes == 1 ? "1 minute" : "\(remainingMinutes) minutes"
+                return "\(hourText) and \(minText)"
+            } else {
+                return hourText
+            }
+        }
+    }
+    
+    private func getWeekTheme(for dayNumber: Int) -> String {
+        let weekNumber = (dayNumber - 1) / 7 + 1
+        let themes = ["Arrays", "Strings", "Linked Lists", "Trees", "Graphs", "Dynamic Programming", "Sorting", "Searching", "Backtracking", "Greedy", "Math", "Stack & Queue", "Hash Maps", "Two Pointers", "Advanced Topics"]
+        return themes[(weekNumber - 1) % themes.count]
     }
     
     private func loadTodayData() {
@@ -471,7 +564,6 @@ struct TodayView: View {
         if let settings = userSettings.first {
             return settings.currentDayNumber
         } else {
-            // Create default user settings if none exist
             let settings = UserSettings(context: viewContext)
             settings.startDate = Date()
             settings.currentStreak = 0
@@ -483,7 +575,7 @@ struct TodayView: View {
                 try viewContext.save()
                 return 1
             } catch {
-                print("Error creating user settings: \(error)")
+                errorHandler.handle(error: .coreDataError(error), source: "TodayView.getCurrentDayNumber")
                 return 1
             }
         }
@@ -498,12 +590,51 @@ struct TodayView: View {
             let days = try viewContext.fetch(request)
             return days.first
         } catch {
-            print("Error fetching day \(dayNumber): \(error)")
+            errorHandler.handle(error: .coreDataError(error), source: "TodayView.fetchDay")
             return nil
         }
     }
     
-
+    private func toggleProblemCompletion(_ problem: DSAProblem) {
+        do {
+            problem.isCompleted.toggle()
+            if problem.isCompleted {
+                problem.completedAt = Date()
+            } else {
+                problem.completedAt = nil
+            }
+            problem.updatedAt = Date()
+            
+            try viewContext.save()
+            
+            let message = problem.isCompleted ? 
+                "\(problem.problemName ?? "Problem") completed" : 
+                "\(problem.problemName ?? "Problem") marked incomplete"
+            accessibilityManager.announceForVoiceOver(message)
+            
+            currentDay?.updateProgress()
+            
+        } catch {
+            errorHandler.handle(error: .coreDataError(error), source: "TodayView.toggleProblemCompletion")
+        }
+    }
+    
+    private func saveReflection() {
+        guard let day = currentDay else { return }
+        
+        do {
+            day.dailyReflection = reflectionText.isEmpty ? nil : reflectionText
+            day.updatedAt = Date()
+            
+            try viewContext.save()
+            showingReflectionSheet = false
+            
+            accessibilityManager.announceForVoiceOver("Reflection saved")
+            
+        } catch {
+            errorHandler.handle(error: .coreDataError(error), source: "TodayView.saveReflection")
+        }
+    }
 }
 
 // MARK: - Today Manager
@@ -519,10 +650,59 @@ class TodayManager: ObservableObject {
     }
 }
 
-// MARK: - Preview
-struct TodayView_Previews: PreviewProvider {
-    static var previews: some View {
-        TodayView()
-            .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+// MARK: - Extensions for Day
+extension Day {
+    var dsaProblemsArray: [DSAProblem] {
+        return dsaProblems?.allObjects as? [DSAProblem] ?? []
+    }
+    
+    var systemDesignTopicsArray: [SystemDesignTopic] {
+        return systemDesignTopics?.allObjects as? [SystemDesignTopic] ?? []
+    }
+    
+    var dsaCompletionStats: (completed: Int, total: Int) {
+        let problems = dsaProblemsArray
+        return (problems.filter { $0.isCompleted }.count, problems.count)
+    }
+    
+    var systemDesignCompletionStats: (completed: Int, total: Int) {
+        let topics = systemDesignTopicsArray
+        return (topics.filter { $0.isCompleted }.count, topics.count)
+    }
+    
+    var totalTimeSpent: Int32 {
+        return dsaProblemsArray.reduce(0) { $0 + $1.timeSpent }
+    }
+    
+    var bonusProblemsCount: Int {
+        return dsaProblemsArray.filter { $0.isBonusProblem }.count
+    }
+    
+    var overallProgress: Float {
+        let dsaStats = dsaCompletionStats
+        let systemStats = systemDesignCompletionStats
+        let totalCompleted = dsaStats.completed + systemStats.completed
+        let totalTasks = dsaStats.total + systemStats.total
+        
+        return totalTasks > 0 ? Float(totalCompleted) / Float(totalTasks) : 0.0
+    }
+    
+    func updateProgress() {
+        let dsaStats = dsaCompletionStats
+        let systemStats = systemDesignCompletionStats
+        
+        dsaProgress = dsaStats.total > 0 ? Float(dsaStats.completed) / Float(dsaStats.total) : 0.0
+        systemDesignProgress = systemStats.total > 0 ? Float(systemStats.completed) / Float(systemStats.total) : 0.0
+        
+        isCompleted = dsaProgress >= 1.0 && systemDesignProgress >= 1.0
+        updatedAt = Date()
+    }
+}
+
+extension UserSettings {
+    var currentDayNumber: Int {
+        guard let startDate = startDate else { return 1 }
+        let daysPassed = Calendar.current.dateComponents([.day], from: startDate, to: Date()).day ?? 0
+        return min(daysPassed + 1, 100)
     }
 }
