@@ -5,10 +5,26 @@ import UserNotifications
 struct MachineModeApp: App {
     let persistenceController = PersistenceController.shared
     @StateObject private var appInitializer = AppInitializer()
+    @StateObject private var errorHandler = ErrorHandler.shared
+    @StateObject private var accessibilityManager = AccessibilityManager.shared
+    @StateObject private var performanceMonitor = PerformanceMonitor.shared
+    @StateObject private var launchOptimizer = LaunchOptimizer.shared
     
     init() {
         // Optimize app launch performance
         optimizeAppLaunch()
+        LaunchOptimizer.shared.startLaunchTracking()
+        
+        // Initialize app version manager
+        AppVersionManager.shared.initialize()
+        
+        // Request notification permissions
+        NotificationManager.shared.requestNotificationPermission { granted in
+            print(granted ? "✅ Notifications enabled" : "⚠️ Notifications disabled")
+        }
+        
+        // Start performance monitoring
+        PerformanceMonitor.shared.startMonitoring()
     }
 
     var body: some Scene {
@@ -16,6 +32,10 @@ struct MachineModeApp: App {
             ContentView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .environmentObject(appInitializer)
+                .environmentObject(errorHandler)
+                .environmentObject(accessibilityManager)
+                .environmentObject(performanceMonitor)
+                .environmentObject(launchOptimizer)
                 .themeAware() // Apply theme management
                 .onAppear {
                     // Perform lazy initialization in background
